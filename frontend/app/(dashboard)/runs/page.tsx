@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Zap } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -22,6 +23,7 @@ type StatusFilter = RunStatus | "all";
 type CRMFilter = CRMTarget | "all";
 
 export default function RunsPage() {
+  const router = useRouter();
   const [runs, setRuns] = useState<Run[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -202,7 +204,12 @@ export default function RunsPage() {
             </TableHeader>
             <TableBody>
               {runs.map((run) => (
-                <RunCard key={run.id} run={run} onRerun={handleRerun} />
+                <RunCard
+                  key={run.id}
+                  run={run}
+                  onView={(r) => router.push(`/runs/${r.id}`)}
+                  onRerun={handleRerun}
+                />
               ))}
             </TableBody>
           </Table>

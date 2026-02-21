@@ -78,6 +78,7 @@ export default function TemplateEditor({
   const [name, setName] = useState("");
   const [systemPrompt, setSystemPrompt] = useState("");
   const [actions, setActions] = useState<CRMActions>(defaultActions);
+  const [touched, setTouched] = useState(false);
 
   useEffect(() => {
     if (template) {
@@ -88,6 +89,7 @@ export default function TemplateEditor({
       setName("");
       setSystemPrompt("");
       setActions(defaultActions);
+      setTouched(false);
     }
   }, [template]);
 
@@ -124,7 +126,11 @@ export default function TemplateEditor({
               placeholder="e.g. B2B Sales Call"
               value={name}
               onChange={(e) => setName(e.target.value)}
+              onBlur={() => setTouched(true)}
             />
+            {touched && !name.trim() && (
+              <p className="text-xs text-red-500">Template name is required</p>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-neutral-600">
@@ -168,7 +174,7 @@ export default function TemplateEditor({
           <Button
             className="w-full bg-black text-white hover:bg-neutral-800 h-9 text-sm"
             onClick={handleSave}
-            disabled={saving || !name.trim()}
+            disabled={saving || !name.trim() || !systemPrompt.trim()}
           >
             {saving ? "Saving..." : "Save Template"}
           </Button>

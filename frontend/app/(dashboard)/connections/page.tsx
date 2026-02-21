@@ -15,6 +15,7 @@ export default function ConnectionsPage() {
   const [apiKey, setApiKey] = useState("");
   const [savingKey, setSavingKey] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [keyTouched, setKeyTouched] = useState(false);
 
   const fireflies = connections.find((c) => c.service === "fireflies");
   const hubspot = connections.find((c) => c.service === "hubspot");
@@ -58,10 +59,10 @@ export default function ConnectionsPage() {
     window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/${service}`;
   };
 
-  const handleDisconnect = async (connectionId: string) => {
+  const handleDisconnect = async (service: string) => {
     try {
-      await api.delete(`/api/connections/${connectionId}`);
-      setConnections((prev) => prev.filter((c) => c.id !== connectionId));
+      await api.delete(`/api/connections/${service}`);
+      setConnections((prev) => prev.filter((c) => c.service !== service));
       toast.success("Disconnected successfully");
     } catch {
       toast.error("Failed to disconnect");
@@ -112,6 +113,7 @@ export default function ConnectionsPage() {
                   className="h-9 text-sm bg-neutral-50 border-neutral-200 flex-1"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
+                  onBlur={() => setKeyTouched(true)}
                 />
                 <Button
                   className="h-9 text-sm bg-black text-white hover:bg-neutral-800"
@@ -121,6 +123,9 @@ export default function ConnectionsPage() {
                   {savingKey ? "Saving..." : "Save"}
                 </Button>
               </div>
+              {keyTouched && apiKey.length > 0 && apiKey.length < 10 && (
+                <p className="text-xs text-amber-500 mt-1">API key seems too short</p>
+              )}
             </div>
           )}
 
@@ -133,7 +138,7 @@ export default function ConnectionsPage() {
               webhookUrl={webhookUrl}
               showWebhookUrl={true}
               onConnect={() => {}}
-              onDisconnect={() => handleDisconnect(fireflies.id)}
+              onDisconnect={() => handleDisconnect("fireflies")}
             />
           )}
         </div>
@@ -150,7 +155,7 @@ export default function ConnectionsPage() {
             connected={!!hubspot}
             workspaceName={hubspot?.metadata?.workspace_name}
             onConnect={() => handleConnectCRM("hubspot")}
-            onDisconnect={() => hubspot && handleDisconnect(hubspot.id)}
+            onDisconnect={() => handleDisconnect("hubspot")}
           />
           <ConnectionCard
             name="Pipedrive"
@@ -163,9 +168,7 @@ export default function ConnectionsPage() {
               pipedrive?.metadata?.company_domain
             }
             onConnect={() => handleConnectCRM("pipedrive")}
-            onDisconnect={() =>
-              pipedrive && handleDisconnect(pipedrive.id)
-            }
+            onDisconnect={() => handleDisconnect("pipedrive")}
           />
         </div>
       </div>

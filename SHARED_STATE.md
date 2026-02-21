@@ -1,5 +1,5 @@
 # SHARED_STATE
-Last updated: 2026-02-21 by Agent 4
+Last updated: 2026-02-21
 
 ## API Contract
 - Backend dev URL: http://localhost:8000
@@ -7,7 +7,7 @@ Last updated: 2026-02-21 by Agent 4
 - Frontend dev URL: http://localhost:3000
 - Frontend prod URL: https://notepipe.vercel.app
 
-## Backend Endpoints (Agent 2 marks complete)
+## Backend Endpoints — ALL COMPLETE
 All routes prefixed with /api (e.g., /api/connections)
 - [x] POST /webhooks/fireflies
 - [x] GET  /connections
@@ -30,25 +30,33 @@ All routes prefixed with /api (e.g., /api/connections)
 - [x] GET  /dashboard/stats
 - [x] DELETE /account
 
-## Frontend Pages (Agent 1 marks complete)
-- [ ] /auth/login
-- [ ] /auth/callback
-- [ ] / (overview dashboard)
-- [ ] /connections
-- [ ] /templates
-- [ ] /runs
-- [ ] /settings
+## Frontend Pages — ALL COMPLETE
+- [x] / (landing page — public, unauthenticated)
+- [x] /auth/login
+- [x] /auth/callback
+- [x] /overview (dashboard — authenticated)
+- [x] /connections
+- [x] /templates
+- [x] /runs
+- [x] /runs/[id] (run detail)
+- [x] /settings
 
-## Design Decisions (Agent 3 owns)
+## Testing
+- [x] Backend: 23 pytest tests (health, users, connections, dashboard, account, templates)
+- [x] Frontend: TypeScript build passes clean
+
+## Design Decisions
 - Light mode only
 - Primary buttons: black (#000000)
 - Sidebar active accent: coral (#E05A4E)
 - Page background: #EFEFEF
 - Card background: white
 - Font: Inter, weights 400/500/600/700/900
+- Landing page: framer-motion animations (Peec.AI style)
 
 ## Blockers
 (none)
 
 ## Deviations from Spec
-(none)
+- Dashboard moved from / to /overview (/ is now landing page)
+- Endpoint renamed from /retry to /rerun (matches frontend convention)
