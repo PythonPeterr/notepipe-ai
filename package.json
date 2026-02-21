@@ -1,0 +1,14 @@
+{
+  "name": "notepipe-ai",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently -n backend,frontend -c blue,green \"cd backend && uv run uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev\"",
+    "dev:backend": "cd backend && uv run uvicorn app.main:app --reload --port 8000",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "setup": "cd backend && uv sync && cd ../frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}
