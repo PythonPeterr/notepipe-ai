@@ -17,7 +17,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/", label: "Overview", icon: LayoutDashboard },
+  { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/connections", label: "Connections", icon: Plug },
   { href: "/templates", label: "Templates", icon: FileText },
   { href: "/runs", label: "Run History", icon: History },
@@ -59,10 +59,7 @@ export default function Sidebar() {
 
       <nav className="flex-1 px-2 space-y-0.5">
         {navItems.map((item) => {
-          const isActive =
-            item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
+          const isActive = pathname.startsWith(item.href);
 
           return (
             <Link

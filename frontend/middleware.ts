@@ -33,17 +33,33 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith("/auth");
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith("/auth");
+  const isLandingPage = pathname === "/";
 
-  if (!user && !isAuthRoute) {
+  // Landing page: authenticated users go to dashboard
+  if (user && isLandingPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/auth/login";
+    url.pathname = "/overview";
     return NextResponse.redirect(url);
   }
 
+  // Landing page: always accessible for unauthenticated
+  if (isLandingPage) {
+    return supabaseResponse;
+  }
+
+  // Auth routes: authenticated users go to dashboard
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = "/";
+    url.pathname = "/overview";
+    return NextResponse.redirect(url);
+  }
+
+  // Protected routes: unauthenticated users go to login
+  if (!user && !isAuthRoute) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/login";
     return NextResponse.redirect(url);
   }
 
