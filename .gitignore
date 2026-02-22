@@ -24,7 +24,7 @@ Thumbs.db
 # Python
 *.pyc
 *.pyo
-uv.lock
+
 
 # Claude Code local settings
 .claude/settings.local.json
