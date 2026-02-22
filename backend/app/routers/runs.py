@@ -3,31 +3,40 @@
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from supabase import Client
 
 from app.middleware.auth import get_current_user, get_supabase
-from app.models.schemas import PaginatedResponse, RunResponse
-from app.services import fireflies, hubspot, pipedrive, processor
+from app.models.schemas import PaginatedRunsResponse, RunResponse
+from app.services import attio, fireflies, hubspot, pipedrive, processor, zoho
 
 logger = logging.getLogger(__name__)
+
+limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(prefix="/runs", tags=["runs"])
 
 
-@router.get("", response_model=PaginatedResponse)
+@router.get("", response_model=PaginatedRunsResponse)
 async def list_runs(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     status: str | None = Query(None),
     crm_target: str | None = Query(None),
+    source: str | None = Query(None),
     user: Any = Depends(get_current_user),
     supabase: Client = Depends(get_supabase),
 ) -> dict[str, Any]:
-    """List runs for the current user with pagination and optional filters."""
+    """List runs for the current user with pagination and optional filters.
+
+    Uses the runs_summary view to avoid fetching heavy JSONB columns
+    (extracted_data, crm_results) on the list page — saves ~10KB egress per row.
+    """
     # Build query for counting
     count_query = (
-        supabase.table("runs")
+        supabase.table("runs_summary")
         .select("id", count="exact")
         .eq("user_id", user.id)
     )
@@ -36,14 +45,16 @@ async def list_runs(
         count_query = count_query.eq("status", status)
     if crm_target:
         count_query = count_query.eq("crm_target", crm_target)
+    if source:
+        count_query = count_query.eq("source", source)
 
     count_resp = count_query.execute()
     total = count_resp.count if count_resp.count is not None else len(count_resp.data)
 
-    # Build query for paginated data
+    # Build query for paginated data using the summary view
     offset = (page - 1) * per_page
     data_query = (
-        supabase.table("runs")
+        supabase.table("runs_summary")
         .select("*")
         .eq("user_id", user.id)
         .order("created_at", desc=True)
@@ -54,6 +65,8 @@ async def list_runs(
         data_query = data_query.eq("status", status)
     if crm_target:
         data_query = data_query.eq("crm_target", crm_target)
+    if source:
+        data_query = data_query.eq("source", source)
 
     data_resp = data_query.execute()
 
@@ -63,6 +76,29 @@ async def list_runs(
         "page": page,
         "per_page": per_page,
     }
+
+
+@router.post("/cleanup-stale")
+async def cleanup_stale_runs(
+    user: Any = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase),
+) -> dict[str, Any]:
+    """Mark pending runs older than 5 minutes as failed (timed out)."""
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat()
+
+    response = (
+        supabase.table("runs")
+        .update({"status": "failed", "error_message": "Run timed out (>5 minutes)"})
+        .eq("user_id", user.id)
+        .eq("status", "pending")
+        .lt("created_at", cutoff)
+        .execute()
+    )
+
+    count = len(response.data) if response.data else 0
+    return {"cleaned": count}
 
 
 @router.get("/{run_id}", response_model=RunResponse)
@@ -87,7 +123,9 @@ async def get_run(
 
 
 @router.post("/{run_id}/rerun", response_model=RunResponse)
+@limiter.limit("10/minute")
 async def rerun_run(
+    request: Request,
     run_id: str,
     user: Any = Depends(get_current_user),
     supabase: Client = Depends(get_supabase),
@@ -109,6 +147,14 @@ async def rerun_run(
         raise HTTPException(status_code=404, detail="Run not found")
 
     original_run = original_resp.data[0]
+
+    # Block re-run for uploaded files (no Fireflies transcript to re-fetch)
+    if original_run.get("source") == "upload":
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot re-run uploaded files. Upload the file again instead.",
+        )
+
     meeting_id = original_run["fireflies_meeting_id"]
 
     # Get user's Fireflies connection
@@ -127,9 +173,9 @@ async def rerun_run(
     if not ff_api_key:
         raise HTTPException(status_code=400, detail="Fireflies API key is empty")
 
-    # Get active template
-    template_resp = (
-        supabase.table("templates")
+    # Get active prompt
+    prompt_resp = (
+        supabase.table("prompts")
         .select("*")
         .eq("user_id", user.id)
         .eq("is_active", True)
@@ -138,17 +184,27 @@ async def rerun_run(
         .execute()
     )
 
-    if not template_resp.data:
-        raise HTTPException(status_code=400, detail="No active template found")
+    if not prompt_resp.data:
+        raise HTTPException(status_code=400, detail="No active prompt found")
 
-    template = template_resp.data[0]
+    prompt = prompt_resp.data[0]
+
+    # Get action config
+    action_config_resp = (
+        supabase.table("action_configs")
+        .select("*")
+        .eq("user_id", user.id)
+        .execute()
+    )
+
+    action_config = action_config_resp.data[0] if action_config_resp.data else {}
 
     # Get CRM connection
     crm_conn_resp = (
         supabase.table("connections")
         .select("*")
         .eq("user_id", user.id)
-        .in_("service", ["hubspot", "pipedrive"])
+        .in_("service", ["hubspot", "pipedrive", "attio", "zoho"])
         .limit(1)
         .execute()
     )
@@ -176,6 +232,23 @@ async def rerun_run(
             user_id=user.id,
             supabase=supabase,
         )
+    elif crm_service == "attio":
+        crm_connection["access_token"] = await attio.ensure_valid_token(
+            access_token=crm_connection["access_token"],
+            refresh_token=crm_connection.get("refresh_token"),
+            token_expires_at=crm_connection.get("token_expires_at"),
+            user_id=user.id,
+            supabase=supabase,
+        )
+    elif crm_service == "zoho":
+        crm_connection["access_token"] = await zoho.ensure_valid_token(
+            access_token=crm_connection["access_token"],
+            refresh_token=crm_connection.get("refresh_token"),
+            token_expires_at=crm_connection.get("token_expires_at"),
+            user_id=user.id,
+            supabase=supabase,
+            metadata=crm_connection.get("metadata", {}),
+        )
 
     # Fetch transcript
     try:
@@ -189,7 +262,7 @@ async def rerun_run(
     # Create a new pending run
     new_run_data = {
         "user_id": user.id,
-        "template_id": template["id"],
+        "prompt_id": prompt["id"],
         "fireflies_meeting_id": meeting_id,
         "meeting_title": transcript.get("title", original_run.get("meeting_title", "Untitled")),
         "meeting_date": transcript.get("date", original_run.get("meeting_date")),
@@ -207,7 +280,7 @@ async def rerun_run(
 
     # Process
     try:
-        result = await processor.process(transcript, template, crm_connection)
+        result = await processor.process(transcript, prompt, action_config, crm_connection)
 
         supabase.table("runs").update({
             "status": result["status"],

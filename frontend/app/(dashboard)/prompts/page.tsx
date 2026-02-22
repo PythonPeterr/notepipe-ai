@@ -7,24 +7,24 @@ import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
-import TemplateEditor from "@/components/app/TemplateEditor";
-import type { Template, CRMActions } from "@/lib/types";
+import PromptEditor from "@/components/app/PromptEditor";
+import type { Prompt } from "@/lib/types";
 
-export default function TemplatesPage() {
-  const [templates, setTemplates] = useState<Template[]>([]);
+export default function PromptsPage() {
+  const [prompts, setPrompts] = useState<Prompt[]>([]);
   const [loading, setLoading] = useState(true);
   const [editorOpen, setEditorOpen] = useState(false);
-  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [editingPrompt, setEditingPrompt] = useState<Prompt | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    fetchTemplates();
+    fetchPrompts();
   }, []);
 
-  const fetchTemplates = async () => {
+  const fetchPrompts = async () => {
     try {
-      const data = await api.get<Template[]>("/api/templates");
-      setTemplates(data);
+      const data = await api.get<Prompt[]>("/api/prompts");
+      setPrompts(data);
     } catch {
       // API not available yet
     } finally {
@@ -32,53 +32,52 @@ export default function TemplatesPage() {
     }
   };
 
-  const handleToggleActive = async (template: Template) => {
+  const handleToggleActive = async (prompt: Prompt) => {
     try {
-      await api.patch(`/api/templates/${template.id}`, {
-        is_active: !template.is_active,
+      await api.patch(`/api/prompts/${prompt.id}`, {
+        is_active: !prompt.is_active,
       });
-      setTemplates((prev) =>
-        prev.map((t) =>
-          t.id === template.id ? { ...t, is_active: !t.is_active } : t
+      setPrompts((prev) =>
+        prev.map((p) =>
+          p.id === prompt.id ? { ...p, is_active: !p.is_active } : p
         )
       );
       toast.success(
-        `Template ${!template.is_active ? "activated" : "deactivated"}`
+        `Prompt ${!prompt.is_active ? "activated" : "deactivated"}`
       );
     } catch {
-      toast.error("Failed to update template");
+      toast.error("Failed to update prompt");
     }
   };
 
-  const handleEdit = (template: Template) => {
-    setEditingTemplate(template);
+  const handleEdit = (prompt: Prompt) => {
+    setEditingPrompt(prompt);
     setEditorOpen(true);
   };
 
   const handleNew = () => {
-    setEditingTemplate(null);
+    setEditingPrompt(null);
     setEditorOpen(true);
   };
 
   const handleSave = async (data: {
     name: string;
     system_prompt: string;
-    crm_actions: CRMActions;
   }) => {
     setSaving(true);
     try {
-      if (editingTemplate) {
-        await api.patch(`/api/templates/${editingTemplate.id}`, data);
-        toast.success("Template saved");
+      if (editingPrompt) {
+        await api.patch(`/api/prompts/${editingPrompt.id}`, data);
+        toast.success("Prompt saved");
       } else {
-        await api.post("/api/templates", data);
-        toast.success("Template created");
+        await api.post("/api/prompts", data);
+        toast.success("Prompt created");
       }
-      await fetchTemplates();
+      await fetchPrompts();
       setEditorOpen(false);
-      setEditingTemplate(null);
+      setEditingPrompt(null);
     } catch {
-      toast.error("Failed to save template");
+      toast.error("Failed to save prompt");
     } finally {
       setSaving(false);
     }
@@ -88,9 +87,9 @@ export default function TemplatesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Templates</h1>
+          <h1 className="text-2xl font-bold text-neutral-900">Prompt Bank</h1>
           <p className="text-sm text-neutral-500 mt-1">
-            Manage your AI extraction templates
+            Manage your AI extraction prompts
           </p>
         </div>
         <Button
@@ -98,13 +97,13 @@ export default function TemplatesPage() {
           onClick={handleNew}
         >
           <Plus className="h-4 w-4" />
-          New template
+          New prompt
         </Button>
       </div>
 
       {loading ? (
         <div className="space-y-3">
-          {Array.from({ length: 4 }).map((_, i) => (
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
               className="bg-white rounded-xl border border-neutral-200 shadow-card p-5"
@@ -119,70 +118,57 @@ export default function TemplatesPage() {
             </div>
           ))}
         </div>
-      ) : templates.length === 0 ? (
+      ) : prompts.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <div className="h-11 w-11 rounded-xl bg-neutral-100 border border-neutral-200 flex items-center justify-center mb-4">
             <FileText className="h-5 w-5 text-neutral-400" />
           </div>
           <p className="text-sm font-semibold text-neutral-800">
-            No templates yet
+            No prompts yet
           </p>
           <p className="text-sm text-neutral-400 mt-1 max-w-xs">
-            Create a template to define how AI extracts and routes meeting data
-            to your CRM.
+            Create a prompt to define how AI extracts meeting data for your CRM.
           </p>
           <Button
             className="mt-5 h-8 text-xs bg-black text-white hover:bg-neutral-800"
             onClick={handleNew}
           >
-            Create template
+            Create prompt
           </Button>
         </div>
       ) : (
         <div className="space-y-3">
-          {templates.map((template) => (
+          {prompts.map((prompt) => (
             <div
-              key={template.id}
+              key={prompt.id}
               className="bg-white rounded-xl border border-neutral-200 shadow-card p-5"
             >
               <div className="flex items-center justify-between">
                 <div
                   className="flex-1 cursor-pointer"
-                  onClick={() => handleEdit(template)}
+                  onClick={() => handleEdit(prompt)}
                 >
                   <div className="flex items-center gap-2">
                     <p className="text-sm font-semibold text-neutral-900">
-                      {template.name}
+                      {prompt.name}
                     </p>
-                    {template.is_default && (
+                    {prompt.is_default && (
                       <span className="text-xs bg-neutral-100 text-neutral-500 px-1.5 py-0.5 rounded border border-neutral-200">
                         Default
                       </span>
                     )}
                   </div>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    {template.description}
+                    {prompt.description}
                   </p>
-                  <div className="flex items-center gap-3 mt-2">
-                    {Object.entries(template.crm_actions)
-                      .filter(([, enabled]) => enabled)
-                      .map(([key]) => (
-                        <span
-                          key={key}
-                          className="text-xs text-neutral-400 capitalize"
-                        >
-                          {key.replace(/_/g, " ")}
-                        </span>
-                      ))}
-                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs text-neutral-400">
-                    {template.is_active ? "Active" : "Inactive"}
+                    {prompt.is_active ? "Active" : "Inactive"}
                   </span>
                   <Switch
-                    checked={template.is_active}
-                    onCheckedChange={() => handleToggleActive(template)}
+                    checked={prompt.is_active}
+                    onCheckedChange={() => handleToggleActive(prompt)}
                   />
                 </div>
               </div>
@@ -191,10 +177,10 @@ export default function TemplatesPage() {
         </div>
       )}
 
-      <TemplateEditor
+      <PromptEditor
         open={editorOpen}
         onOpenChange={setEditorOpen}
-        template={editingTemplate}
+        prompt={editingPrompt}
         onSave={handleSave}
         saving={saving}
       />

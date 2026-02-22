@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import { Input } from "@/components/ui/input";
@@ -30,6 +30,8 @@ export default function RunsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [crmFilter, setCRMFilter] = useState<CRMFilter>("all");
+  const [page, setPage] = useState(1);
+  const perPage = 20;
 
   const fetchRuns = useCallback(async () => {
     setLoading(true);
@@ -38,7 +40,8 @@ export default function RunsPage() {
       if (search) params.set("search", search);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (crmFilter !== "all") params.set("crm_target", crmFilter);
-      params.set("per_page", "50");
+      params.set("page", String(page));
+      params.set("per_page", String(perPage));
 
       const data = await api.get<PaginatedResponse<Run>>(
         `/api/runs?${params.toString()}`
@@ -50,7 +53,7 @@ export default function RunsPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, statusFilter, crmFilter]);
+  }, [search, statusFilter, crmFilter, page]);
 
   useEffect(() => {
     fetchRuns();
@@ -77,6 +80,8 @@ export default function RunsPage() {
     { value: "all", label: "All CRMs" },
     { value: "hubspot", label: "HubSpot" },
     { value: "pipedrive", label: "Pipedrive" },
+    { value: "attio", label: "Attio" },
+    { value: "zoho", label: "Zoho" },
   ];
 
   if (!loading && runs.length === 0 && !search && statusFilter === "all" && crmFilter === "all") {
@@ -135,7 +140,7 @@ export default function RunsPage() {
                     ? "bg-neutral-100 text-neutral-900"
                     : ""
                 }`}
-                onClick={() => setStatusFilter(opt.value)}
+                onClick={() => { setStatusFilter(opt.value); setPage(1); }}
               >
                 {opt.label}
               </Button>
@@ -152,7 +157,7 @@ export default function RunsPage() {
                     ? "bg-neutral-100 text-neutral-900"
                     : ""
                 }`}
-                onClick={() => setCRMFilter(opt.value)}
+                onClick={() => { setCRMFilter(opt.value); setPage(1); }}
               >
                 {opt.label}
               </Button>
@@ -213,6 +218,35 @@ export default function RunsPage() {
               ))}
             </TableBody>
           </Table>
+        )}
+
+        {/* Pagination */}
+        {!loading && total > perPage && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-neutral-100">
+            <span className="text-xs text-neutral-400">
+              Page {page} of {Math.ceil(total / perPage)}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-7 p-0 border-neutral-200"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => p - 1)}
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 w-7 p-0 border-neutral-200"
+                disabled={page >= Math.ceil(total / perPage)}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
         )}
       </div>
     </div>

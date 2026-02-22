@@ -37,19 +37,16 @@ def build_prompt(transcript: dict[str, Any], template_prompt: str, actions: dict
     Returns:
         The assembled prompt string to send to Claude.
     """
-    sentences = transcript.get("sentences", [])
-    formatted_lines = [
-        f"{s.get('speaker_name', 'Unknown')}: {s.get('text', '')}"
-        for s in sentences
-    ]
-    conversation_text = "\n".join(formatted_lines)
+    from app.services.fireflies import format_transcript_for_llm
+
+    conversation_text = format_transcript_for_llm(transcript)
 
     action_instructions: list[str] = []
     if not actions.get("create_contact", True):
         action_instructions.append("Do NOT extract contact information.")
     if not actions.get("create_company", True):
         action_instructions.append("Do NOT extract company information.")
-    if not actions.get("update_deal_stage", False):
+    if not actions.get("create_deal", False) and not actions.get("update_deal_stage", False):
         action_instructions.append("Set deal_stage to null.")
     if not actions.get("extract_followups", True):
         action_instructions.append("Set follow_ups to an empty list.")
@@ -68,6 +65,47 @@ def build_prompt(transcript: dict[str, Any], template_prompt: str, actions: dict
     )
 
 
+def build_prompt_from_text(
+    text: str, template_prompt: str, actions: dict[str, Any], filename: str
+) -> str:
+    """Build the full prompt from raw text (uploaded file), template prompt, and CRM actions.
+
+    Same logic as build_prompt() but takes pre-extracted text instead of a
+    Fireflies transcript dict.
+
+    Args:
+        text: Plain text extracted from the uploaded file.
+        template_prompt: The user's template-specific system prompt.
+        actions: The CRM actions configuration dict.
+        filename: Original filename for context in the prompt.
+
+    Returns:
+        The assembled prompt string to send to Claude.
+    """
+    action_instructions: list[str] = []
+    if not actions.get("create_contact", True):
+        action_instructions.append("Do NOT extract contact information.")
+    if not actions.get("create_company", True):
+        action_instructions.append("Do NOT extract company information.")
+    if not actions.get("create_deal", False) and not actions.get("update_deal_stage", False):
+        action_instructions.append("Set deal_stage to null.")
+    if not actions.get("extract_followups", True):
+        action_instructions.append("Set follow_ups to an empty list.")
+
+    action_section = ""
+    if action_instructions:
+        action_section = "\n\nAction constraints:\n" + "\n".join(
+            f"- {instr}" for instr in action_instructions
+        )
+
+    return (
+        f"{SYSTEM_PROMPT_BASE}\n\n"
+        f"{template_prompt}"
+        f"{action_section}\n\n"
+        f"Meeting notes (uploaded from {filename}):\n{text}"
+    )
+
+
 async def extract(prompt: str) -> ExtractedData:
     """Send the prompt to Claude and parse the JSON response into ExtractedData.
 
@@ -81,7 +119,7 @@ async def extract(prompt: str) -> ExtractedData:
         ValueError: If Claude returns non-JSON or unparseable output.
     """
     settings = get_settings()
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key, max_retries=3)
 
     message = await client.messages.create(
         model=MODEL,

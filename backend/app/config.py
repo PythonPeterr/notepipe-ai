@@ -26,8 +26,19 @@ class Settings(BaseSettings):
     pipedrive_client_secret: str
     pipedrive_redirect_uri: str = "https://notepipe-api.railway.app/auth/pipedrive/callback"
 
+    # Attio OAuth
+    attio_client_id: str = ""
+    attio_client_secret: str = ""
+    attio_redirect_uri: str = "https://notepipe-api.railway.app/api/auth/attio/callback"
+
+    # Zoho OAuth
+    zoho_client_id: str = ""
+    zoho_client_secret: str = ""
+    zoho_redirect_uri: str = "https://notepipe-api.railway.app/api/auth/zoho/callback"
+
     # App
     frontend_url: str = "https://notepipe.vercel.app"
+    dev_bypass_auth: bool = False
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

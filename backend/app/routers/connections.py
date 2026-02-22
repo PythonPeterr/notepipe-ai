@@ -13,6 +13,7 @@ from app.models.schemas import (
     MessageResponse,
     WebhookURLResponse,
 )
+from app.services import fireflies
 
 router = APIRouter(prefix="/connections", tags=["connections"])
 
@@ -50,6 +51,12 @@ async def save_fireflies_key(
     if not body.api_key.strip():
         raise HTTPException(status_code=400, detail="API key cannot be empty")
 
+    # Validate the API key by making a test call to Fireflies
+    try:
+        await fireflies.validate_api_key(body.api_key.strip())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     # Upsert: try update first, insert if not found
     existing = (
         supabase.table("connections")
@@ -59,10 +66,15 @@ async def save_fireflies_key(
         .execute()
     )
 
+    # Store a masked hint so the frontend can show which key is connected
+    # without ever exposing the full token
+    key = body.api_key.strip()
+    masked = f"••••{key[-4:]}" if len(key) > 4 else "••••"
+
     if existing.data:
         response = (
             supabase.table("connections")
-            .update({"access_token": body.api_key})
+            .update({"access_token": key, "metadata": {"key_hint": masked}})
             .eq("user_id", user.id)
             .eq("service", "fireflies")
             .execute()
@@ -73,8 +85,8 @@ async def save_fireflies_key(
             .insert({
                 "user_id": user.id,
                 "service": "fireflies",
-                "access_token": body.api_key,
-                "metadata": {},
+                "access_token": key,
+                "metadata": {"key_hint": masked},
             })
             .execute()
         )
@@ -99,7 +111,7 @@ async def delete_connection(
     supabase: Client = Depends(get_supabase),
 ) -> dict[str, str]:
     """Remove a connection for the specified service."""
-    valid_services = {"fireflies", "hubspot", "pipedrive"}
+    valid_services = {"fireflies", "hubspot", "pipedrive", "attio", "zoho"}
     if service not in valid_services:
         raise HTTPException(
             status_code=400,
@@ -125,17 +137,17 @@ async def get_fireflies_webhook_url(
     user: Any = Depends(get_current_user),
     settings: Settings = Depends(get_settings),
 ) -> dict[str, str]:
-    """Return the webhook URL for the user to configure in Fireflies.
+    """Return the webhook config the user needs to set up in Fireflies.
 
-    The clientReferenceId field should be set to the user_id in Fireflies settings.
-    This URL is what the user pastes into their Fireflies webhook configuration.
+    Returns the webhook URL, secret, and user ID — all three values are
+    required to configure the Fireflies webhook integration.
     """
-    # Determine the backend base URL from the redirect URIs
-    # Strip the path from hubspot redirect URI to get the base
-    base_url = settings.hubspot_redirect_uri.rsplit("/auth/hubspot/callback", 1)[0]
+    base_url = settings.hubspot_redirect_uri.rsplit("/api/auth/hubspot/callback", 1)[0]
     if not base_url:
         base_url = "https://notepipe-api.railway.app"
 
-    webhook_url = f"{base_url}/api/webhooks/fireflies"
-
-    return {"webhook_url": webhook_url}
+    return {
+        "webhook_url": f"{base_url}/api/webhooks/fireflies",
+        "webhook_secret": settings.fireflies_webhook_secret,
+        "user_id": str(user.id),
+    }

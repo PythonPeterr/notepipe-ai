@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Fireflies.ai purple flame/spark mark -->
+  <defs>
+    <linearGradient id="ff-grad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#A855F7"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <path d="M256 32c-8 0-16 4-20 12l-80 160c-4 8-4 16 0 24l80 160c4 8 12 12 20 12s16-4 20-12l80-160c4-8 4-16 0-24L276 44c-4-8-12-12-20-12z" fill="url(#ff-grad)" opacity="0.9"/>
+  <path d="M256 112c-6 0-12 3-15 9l-52 104c-3 6-3 12 0 18l52 104c3 6 9 9 15 9s12-3 15-9l52-104c3-6 3-12 0-18L271 121c-3-6-9-9-15-9z" fill="white" opacity="0.3"/>
+  <circle cx="256" cy="440" r="24" fill="url(#ff-grad)"/>
+  <circle cx="196" cy="460" r="14" fill="#A855F7" opacity="0.6"/>
+  <circle cx="316" cy="460" r="14" fill="#7C3AED" opacity="0.6"/>
+</svg>

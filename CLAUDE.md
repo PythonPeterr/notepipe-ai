@@ -2,30 +2,10 @@
 
 ## What is this?
 
-Notepipe is a post-meeting CRM automation SaaS. When a Fireflies meeting ends, a webhook fires, Claude extracts structured sales data from the transcript, and writes it to HubSpot or Pipedrive automatically. Users configure extraction via prompt templates and toggle which CRM actions to run.
+Notepipe is a post-meeting CRM automation SaaS. When a Fireflies meeting ends, a webhook fires, Claude extracts structured sales data from the transcript, and writes it to the user's connected CRM automatically. Users configure extraction via prompts and toggle CRM actions separately via action configs.
 
 **Tagline:** "Notes flow into your CRM"
 **Domain:** notepipe.ai
-
----
-
-## Build order (strict — do not deviate)
-
-1. **Phase 1 — Shared foundation** → read `docs/04-ORCHESTRATION.md` first
-2. **Phase 2 — Backend** → read `docs/02-BACKEND.md`
-3. **Phase 3 — UI Components** → read `docs/03-UI-UX.md`
-4. **Phase 4 — Frontend integration** → read `docs/01-FRONTEND.md`
-
----
-
-## Rules
-
-- Always read the spec file for the current phase before writing any code
-- Do not touch files outside the current phase's scope
-- Treat `docs/types.ts` as the canonical type contract — never deviate from it
-- Treat `docs/schema.sql` as the canonical database schema — never deviate from it
-- Commit after completing each phase with a descriptive message
-- If something is unclear, check `docs/SHARED_STATE.md` before asking
 
 ---
 
@@ -33,11 +13,11 @@ Notepipe is a post-meeting CRM automation SaaS. When a Fireflies meeting ends, a
 
 | Layer             | Technology                                     | Hosting       |
 | ----------------- | ---------------------------------------------- | ------------- |
-| Frontend          | Next.js 14 (App Router) + ShadCN/UI + Tailwind | Vercel        |
+| Frontend          | Next.js 16 (App Router) + ShadCN/UI + Tailwind | Vercel        |
 | Backend           | FastAPI (Python 3.12) + uv + pyproject.toml    | Railway       |
 | Database + Auth   | Supabase (PostgreSQL + Row Level Security)     | Supabase      |
 | Transcript source | Fireflies webhook                              | —             |
-| CRM integrations  | HubSpot + Pipedrive OAuth                      | —             |
+| CRM integrations  | HubSpot, Pipedrive, Attio, Zoho (all OAuth)   | —             |
 | LLM               | claude-sonnet-4-5                              | Anthropic API |
 
 ---
@@ -46,19 +26,47 @@ Notepipe is a post-meeting CRM automation SaaS. When a Fireflies meeting ends, a
 
 ```
 notepipe-ai/
-├── CLAUDE.md                  ← you are here (auto-read by Claude Code)
-├── docs/
-│   ├── 01-FRONTEND.md         # Next.js pages, auth, API calls
-│   ├── 02-BACKEND.md          # FastAPI endpoints, services, webhook flow
-│   ├── 03-UI-UX.md            # Design system, ShadCN components, Peec.AI aesthetic
-│   ├── 04-ORCHESTRATION.md    # Shared types, schema, seed data, coordination
-│   ├── SHARED_STATE.md        # Live build status — update after each phase
+├── CLAUDE.md                  ← you are here
+├── shared/
 │   ├── schema.sql             # Canonical Supabase DDL
-│   ├── seed.sql               # 4 default prompt templates
+│   ├── seed.sql               # Default prompt + action config seed
 │   └── types.ts               # Canonical TypeScript types
 ├── frontend/                  # Next.js app
+│   ├── app/(marketing)/       # Landing page
+│   ├── app/(dashboard)/       # Overview, connections, prompts, actions, runs, uploads, settings
+│   ├── app/auth/              # Login + callback
+│   ├── components/            # ShadCN + app components
+│   └── lib/                   # api.ts, types.ts, supabase client
 └── backend/                   # FastAPI app
+    ├── app/main.py            # Entry point, registers all routers
+    ├── app/config.py          # Pydantic settings from .env
+    ├── app/middleware/auth.py  # JWT verification + dev bypass
+    ├── app/models/schemas.py  # Pydantic models
+    ├── app/routers/           # account, actions, auth, connections, dashboard, prompts, runs, uploads, users, webhooks
+    └── app/services/          # attio, fireflies, file_parser, hubspot, llm, pipedrive, processor, zoho
 ```
+
+---
+
+## Database tables (canonical: `shared/schema.sql`)
+
+| Table | Purpose |
+|-------|---------|
+| `connections` | OAuth tokens for Fireflies + 4 CRMs. One row per (user, service). |
+| `prompts` | User-configurable LLM extraction prompts. Each has name, system_prompt, is_active. |
+| `action_configs` | Per-user CRM action toggles (create_contact, create_company, link_contact_to_company, attach_note, create_deal, update_deal_stage, extract_followups, log_meeting). One row per user. |
+| `runs` | One row per pipeline execution. Has extracted_data + crm_results JSONB. |
+| `webhook_events` | Raw Fireflies webhook payloads. Backend-only, no RLS. |
+
+---
+
+## Key architecture decisions
+
+- **Prompts and action configs are separate** — prompts control what the LLM extracts, action configs control which CRM actions run. They are NOT embedded together.
+- **uv** for Python dependency management (not pip, not requirements.txt)
+- **Supabase magic link + Google OAuth** for auth (not Clerk, not NextAuth)
+- **claude-sonnet-4-5** for transcript extraction
+- **4 CRM integrations:** HubSpot (HTML notes, token refresh), Pipedrive (plain text, token refresh), Attio (Markdown notes, no token expiry), Zoho (plain text, region-aware token refresh)
 
 ---
 
@@ -70,17 +78,6 @@ notepipe-ai/
 - Sidebar active accent: `#E05A4E` coral/red thin left border
 - Text primary: `#171717`, secondary: `#6B6B6B`
 - Font: Inter, buttons `rounded-md`, cards `rounded-xl`
-- Reference: Peec.AI aesthetic — see `docs/03-UI-UX.md` for full spec
-
----
-
-## Key decisions (do not revisit)
-
-- **uv** for Python dependency management (not pip, not requirements.txt)
-- **Supabase magic link** for auth (not Clerk, not NextAuth)
-- **Black primary color** for all CTA buttons
-- **claude-sonnet-4-5** for transcript extraction
-- **Background #EFEFEF**, not white
 
 ---
 
@@ -104,12 +101,22 @@ FIREFLIES_WEBHOOK_SECRET=
 # HubSpot OAuth
 HUBSPOT_CLIENT_ID=
 HUBSPOT_CLIENT_SECRET=
-HUBSPOT_REDIRECT_URI=https://notepipe-api.railway.app/auth/hubspot/callback
+HUBSPOT_REDIRECT_URI=https://notepipe-api.railway.app/api/auth/hubspot/callback
 
 # Pipedrive OAuth
 PIPEDRIVE_CLIENT_ID=
 PIPEDRIVE_CLIENT_SECRET=
-PIPEDRIVE_REDIRECT_URI=https://notepipe-api.railway.app/auth/pipedrive/callback
+PIPEDRIVE_REDIRECT_URI=https://notepipe-api.railway.app/api/auth/pipedrive/callback
+
+# Attio OAuth
+ATTIO_CLIENT_ID=
+ATTIO_CLIENT_SECRET=
+ATTIO_REDIRECT_URI=https://notepipe-api.railway.app/api/auth/attio/callback
+
+# Zoho OAuth
+ZOHO_CLIENT_ID=
+ZOHO_CLIENT_SECRET=
+ZOHO_REDIRECT_URI=https://notepipe-api.railway.app/api/auth/zoho/callback
 
 # App
 FRONTEND_URL=https://notepipe.vercel.app

@@ -7,21 +7,84 @@ from pydantic import BaseModel, Field
 # Enums / Literals
 # ---------------------------------------------------------------------------
 
-ConnectionService = Literal["fireflies", "hubspot", "pipedrive"]
+ConnectionService = Literal["fireflies", "hubspot", "pipedrive", "attio", "zoho"]
 RunStatus = Literal["pending", "success", "failed"]
-CRMTarget = Literal["hubspot", "pipedrive"]
+RunSource = Literal["fireflies", "upload"]
+CRMTarget = Literal["hubspot", "pipedrive", "attio", "zoho"]
 
 
 # ---------------------------------------------------------------------------
-# CRM Actions
+# Prompt
 # ---------------------------------------------------------------------------
 
-class CRMActions(BaseModel):
-    create_contact: bool = True
-    create_company: bool = True
-    attach_note: bool = True
-    update_deal_stage: bool = False
-    extract_followups: bool = True
+class PromptResponse(BaseModel):
+    id: str
+    user_id: str
+    name: str
+    description: str | None = None
+    system_prompt: str
+    is_default: bool
+    is_active: bool
+    created_at: str
+    updated_at: str
+
+
+class PromptCreate(BaseModel):
+    name: str = Field(..., max_length=255)
+    description: str | None = Field(None, max_length=1000)
+    system_prompt: str = Field(..., max_length=50000)
+    is_default: bool = False
+    is_active: bool = True
+
+
+class PromptUpdate(BaseModel):
+    name: str | None = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=1000)
+    system_prompt: str | None = Field(None, max_length=50000)
+    is_default: bool | None = None
+    is_active: bool | None = None
+
+
+class PromptSummaryResponse(BaseModel):
+    """Lightweight prompt data for list pages — no system_prompt."""
+
+    id: str
+    user_id: str
+    name: str
+    description: str | None = None
+    is_active: bool
+    is_default: bool
+    created_at: str
+
+
+# ---------------------------------------------------------------------------
+# Action Config
+# ---------------------------------------------------------------------------
+
+class ActionConfigResponse(BaseModel):
+    id: str
+    user_id: str
+    create_contact: bool
+    create_company: bool
+    link_contact_to_company: bool
+    attach_note: bool
+    create_deal: bool
+    update_deal_stage: bool
+    extract_followups: bool
+    log_meeting: bool
+    created_at: str
+    updated_at: str
+
+
+class ActionConfigUpdate(BaseModel):
+    create_contact: bool | None = None
+    create_company: bool | None = None
+    link_contact_to_company: bool | None = None
+    attach_note: bool | None = None
+    create_deal: bool | None = None
+    update_deal_stage: bool | None = None
+    extract_followups: bool | None = None
+    log_meeting: bool | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -43,41 +106,8 @@ class ConnectionResponse(BaseModel):
 
 class WebhookURLResponse(BaseModel):
     webhook_url: str
-
-
-# ---------------------------------------------------------------------------
-# Template
-# ---------------------------------------------------------------------------
-
-class TemplateResponse(BaseModel):
-    id: str
+    webhook_secret: str
     user_id: str
-    name: str
-    description: str | None = None
-    system_prompt: str
-    is_default: bool
-    is_active: bool
-    crm_actions: CRMActions
-    created_at: str
-    updated_at: str
-
-
-class TemplateCreate(BaseModel):
-    name: str
-    description: str | None = None
-    system_prompt: str
-    is_default: bool = False
-    is_active: bool = True
-    crm_actions: CRMActions = Field(default_factory=CRMActions)
-
-
-class TemplateUpdate(BaseModel):
-    name: str | None = None
-    description: str | None = None
-    system_prompt: str | None = None
-    is_default: bool | None = None
-    is_active: bool | None = None
-    crm_actions: CRMActions | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +151,7 @@ class CRMResults(BaseModel):
     company_id: str | None = None
     note_id: str | None = None
     deal_id: str | None = None
+    meeting_id: str | None = None
     errors: list[str] = Field(default_factory=list)
 
 
@@ -131,12 +162,14 @@ class CRMResults(BaseModel):
 class RunResponse(BaseModel):
     id: str
     user_id: str
-    template_id: str | None = None
+    prompt_id: str | None = None
     fireflies_meeting_id: str
     meeting_title: str | None = None
     meeting_date: str | None = None
     crm_target: CRMTarget
     status: RunStatus
+    source: RunSource = "fireflies"
+    original_filename: str | None = None
     extracted_data: ExtractedData | dict[str, Any] | None = None
     crm_results: CRMResults | dict[str, Any] | None = None
     error_message: str | None = None
@@ -144,8 +177,24 @@ class RunResponse(BaseModel):
     created_at: str
 
 
-class PaginatedResponse(BaseModel):
-    items: list[RunResponse]
+class RunSummaryResponse(BaseModel):
+    """Lightweight run data for list pages — no extracted_data or crm_results."""
+
+    id: str
+    user_id: str
+    meeting_title: str | None = None
+    meeting_date: str | None = None
+    crm_target: CRMTarget
+    status: RunStatus
+    source: RunSource = "fireflies"
+    original_filename: str | None = None
+    error_message: str | None = None
+    duration_ms: int | None = None
+    created_at: str
+
+
+class PaginatedRunsResponse(BaseModel):
+    items: list[RunSummaryResponse]
     total: int
     page: int
     per_page: int

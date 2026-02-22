@@ -7,7 +7,9 @@ import {
   LayoutDashboard,
   Plug,
   FileText,
+  Zap,
   History,
+  Upload,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -19,8 +21,10 @@ import { Button } from "@/components/ui/button";
 const navItems = [
   { href: "/overview", label: "Overview", icon: LayoutDashboard },
   { href: "/connections", label: "Connections", icon: Plug },
-  { href: "/templates", label: "Templates", icon: FileText },
+  { href: "/prompts", label: "Prompt Bank", icon: FileText },
+  { href: "/actions", label: "Actions", icon: Zap },
   { href: "/runs", label: "Run History", icon: History },
+  { href: "/uploads", label: "Uploads", icon: Upload },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

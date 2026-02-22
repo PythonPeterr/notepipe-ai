@@ -1,5 +1,7 @@
 """Tests for the /api/connections endpoints."""
 
+from unittest.mock import AsyncMock, patch
+
 import pytest
 
 from tests.conftest import make_supabase_chain
@@ -54,7 +56,12 @@ async def test_list_connections_empty(client, mock_supabase):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_save_fireflies_key_insert(client, mock_supabase):
+@patch(
+    "app.services.fireflies.validate_api_key",
+    new_callable=AsyncMock,
+    return_value={"user_id": "ff-123", "email": "test@test.com", "name": "Test"},
+)
+async def test_save_fireflies_key_insert(mock_validate, client, mock_supabase):
     """POST /api/connections/fireflies should upsert the API key."""
     # First call: select to check existing -> no data (insert path)
     select_chain = make_supabase_chain(data=[])
@@ -78,10 +85,16 @@ async def test_save_fireflies_key_insert(client, mock_supabase):
     data = response.json()
     assert data["service"] == "fireflies"
     assert data["id"] == "conn-new"
+    mock_validate.assert_called_once_with("ff-live-12345")
 
 
 @pytest.mark.asyncio
-async def test_save_fireflies_key_update(client, mock_supabase):
+@patch(
+    "app.services.fireflies.validate_api_key",
+    new_callable=AsyncMock,
+    return_value={"user_id": "ff-123", "email": "test@test.com", "name": "Test"},
+)
+async def test_save_fireflies_key_update(mock_validate, client, mock_supabase):
     """POST /api/connections/fireflies with existing connection should update."""
     # First call: select existing -> found
     select_chain = make_supabase_chain(data=[{"id": "conn-existing"}])
@@ -102,6 +115,7 @@ async def test_save_fireflies_key_update(client, mock_supabase):
     )
     assert response.status_code == 200
     assert response.json()["id"] == "conn-existing"
+    mock_validate.assert_called_once_with("ff-live-67890")
 
 
 @pytest.mark.asyncio

@@ -1,10 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+const DEV_BYPASS = process.env.NEXT_PUBLIC_DEV_BYPASS_AUTH === "true";
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isAuthRoute = pathname.startsWith("/auth");
+  const isLandingPage = pathname === "/";
+
   let supabaseResponse = NextResponse.next({
     request,
   });
+
+  // Dev mode: skip all auth checks
+  if (DEV_BYPASS) {
+    return supabaseResponse;
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,23 +40,26 @@ export async function middleware(request: NextRequest) {
     }
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
-  const isAuthRoute = pathname.startsWith("/auth");
-  const isLandingPage = pathname === "/";
-
-  // Landing page: authenticated users go to dashboard
-  if (user && isLandingPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/overview";
-    return NextResponse.redirect(url);
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Auth check failed — treat as unauthenticated
   }
 
-  // Landing page: always accessible for unauthenticated
+  // Landing page
   if (isLandingPage) {
+    if (user) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/overview";
+      return NextResponse.redirect(url);
+    }
+    return supabaseResponse;
+  }
+
+  // Auth callback: always let through (client-side PKCE exchange)
+  if (pathname === "/auth/callback") {
     return supabaseResponse;
   }
 

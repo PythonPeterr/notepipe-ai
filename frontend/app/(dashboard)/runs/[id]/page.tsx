@@ -14,6 +14,7 @@ import {
   Clock,
   AlertTriangle,
   RotateCcw,
+  Upload,
 } from "lucide-react";
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
@@ -109,6 +110,7 @@ export default function RunDetailPage() {
   }
 
   const { extracted_data, crm_results } = run;
+  const isUpload = run.source === "upload";
 
   return (
     <div className="space-y-6">
@@ -129,6 +131,12 @@ export default function RunDetailPage() {
               {run.meeting_title}
             </h1>
             <div className="flex items-center gap-3 text-sm text-neutral-500">
+              {isUpload && run.original_filename && (
+                <span className="inline-flex items-center gap-1">
+                  <Upload className="h-3.5 w-3.5" />
+                  Uploaded from: {run.original_filename}
+                </span>
+              )}
               {run.meeting_date && (
                 <span>
                   {format(new Date(run.meeting_date), "MMMM d, yyyy")}
@@ -148,8 +156,8 @@ export default function RunDetailPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-md border border-neutral-200 capitalize">
-              {run.crm_target}
+            <span className="text-xs bg-neutral-100 text-neutral-600 px-2 py-0.5 rounded-md border border-neutral-200">
+              {{ hubspot: "HubSpot", pipedrive: "Pipedrive", attio: "Attio", zoho: "Zoho" }[run.crm_target]}
             </span>
             <StatusBadge status={run.status} />
           </div>
@@ -385,16 +393,25 @@ export default function RunDetailPage() {
         </div>
       )}
 
-      {/* Re-run button */}
+      {/* Action button */}
       <div className="flex justify-end">
-        <Button
-          className="bg-black text-white hover:bg-neutral-800 rounded-md"
-          onClick={handleRerun}
-          disabled={rerunning}
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          {rerunning ? "Re-running..." : "Re-run"}
-        </Button>
+        {isUpload ? (
+          <Link href="/uploads">
+            <Button className="bg-black text-white hover:bg-neutral-800 rounded-md">
+              <Upload className="h-4 w-4 mr-2" />
+              Upload another
+            </Button>
+          </Link>
+        ) : (
+          <Button
+            className="bg-black text-white hover:bg-neutral-800 rounded-md"
+            onClick={handleRerun}
+            disabled={rerunning}
+          >
+            <RotateCcw className="h-4 w-4 mr-2" />
+            {rerunning ? "Re-running..." : "Re-run"}
+          </Button>
+        )}
       </div>
     </div>
   );

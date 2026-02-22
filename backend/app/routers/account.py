@@ -22,7 +22,7 @@ async def delete_account(
     """Permanently delete the current user's account and all associated data.
 
     The database cascade (ON DELETE CASCADE) handles removing connections,
-    templates, and runs automatically when the auth user is deleted.
+    prompts, action_configs, and runs automatically when the auth user is deleted.
     """
     try:
         supabase.auth.admin.delete_user(user.id)
